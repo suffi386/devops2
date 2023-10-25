@@ -2,6 +2,7 @@ package senders
 
 import (
 	"context"
+	"github.com/zitadel/zitadel/internal/notification/messages"
 
 	"github.com/zitadel/logging"
 	"github.com/zitadel/zitadel/internal/api/authz"
@@ -21,11 +22,11 @@ func WebhookChannels(
 	getLogProvider func(ctx context.Context) (*log.Config, error),
 	successMetricName,
 	failureMetricName string,
-) (*Chain, error) {
+) (*Chain[*messages.JSON], error) {
 	if err := webhookConfig.Validate(); err != nil {
 		return nil, err
 	}
-	channels := make([]channels.NotificationChannel, 0, 3)
+	channels := make([]channels.NotificationChannel[*messages.JSON], 0, 3)
 	webhookChannel, err := webhook.InitChannel(ctx, webhookConfig)
 	logging.WithFields(
 		"instance", authz.GetInstance(ctx).InstanceID(),
@@ -43,6 +44,6 @@ func WebhookChannels(
 			),
 		)
 	}
-	channels = append(channels, debugChannels(ctx, getFileSystemProvider, getLogProvider)...)
+	channels = append(channels, debugChannels[*messages.JSON](ctx, getFileSystemProvider, getLogProvider)...)
 	return ChainChannels(channels...), nil
 }

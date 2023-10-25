@@ -13,13 +13,21 @@ import (
 	"github.com/zitadel/zitadel/internal/notification/messages"
 )
 
-var _ channels.NotificationChannel = (*Email)(nil)
+var _ channels.NotificationChannel[*messages.Email] = (*Email)(nil)
 
 type Email struct {
-	smtpClient     *smtp.Client
-	senderAddress  string
-	senderName     string
-	replyToAddress string
+	smtpClient      *smtp.Client
+	httpRelayClient *HttpRelayClient
+	senderAddress   string
+	senderName      string
+	replyToAddress  string
+}
+
+type HttpRelayClient struct {
+	User     string
+	Password string
+	Host     string
+	Protocol string
 }
 
 func InitChannel(cfg *Config) (*Email, error) {
@@ -37,24 +45,19 @@ func InitChannel(cfg *Config) (*Email, error) {
 	}, nil
 }
 
-func (email *Email) HandleMessage(message channels.Message) error {
+func (email *Email) HandleMessage(message *messages.Email) error {
 	defer email.smtpClient.Close()
-	emailMsg, ok := message.(*messages.Email)
-	if !ok {
-		return caos_errs.ThrowInternal(nil, "EMAIL-s8JLs", "message is not EmailMessage")
+	if message.Content == "" || message.Subject == "" || len(message.Recipients) == 0 {
+		return caos_errs.ThrowInternalf(nil, "EMAIL-zGemZ", "subject, recipients and content must be set but got subject %s, recipients length %d and content length %d", message.Subject, len(message.Recipients), len(message.Content))
 	}
-
-	if emailMsg.Content == "" || emailMsg.Subject == "" || len(emailMsg.Recipients) == 0 {
-		return caos_errs.ThrowInternalf(nil, "EMAIL-zGemZ", "subject, recipients and content must be set but got subject %s, recipients length %d and content length %d", emailMsg.Subject, len(emailMsg.Recipients), len(emailMsg.Content))
-	}
-	emailMsg.SenderEmail = email.senderAddress
-	emailMsg.SenderName = email.senderName
-	emailMsg.ReplyToAddress = email.replyToAddress
+	message.SenderEmail = email.senderAddress
+	message.SenderName = email.senderName
+	message.ReplyToAddress = email.replyToAddress
 	// To && From
-	if err := email.smtpClient.Mail(emailMsg.SenderEmail); err != nil {
-		return caos_errs.ThrowInternalf(err, "EMAIL-s3is3", "could not set sender: %v", emailMsg.SenderEmail)
+	if err := email.smtpClient.Mail(message.SenderEmail); err != nil {
+		return caos_errs.ThrowInternalf(err, "EMAIL-s3is3", "could not set sender: %v", message.SenderEmail)
 	}
-	for _, recp := range append(append(emailMsg.Recipients, emailMsg.CC...), emailMsg.BCC...) {
+	for _, recp := range append(append(message.Recipients, message.CC...), message.BCC...) {
 		if err := email.smtpClient.Rcpt(recp); err != nil {
 			return caos_errs.ThrowInternalf(err, "EMAIL-s4is4", "could not set recipient: %v", recp)
 		}
@@ -66,7 +69,7 @@ func (email *Email) HandleMessage(message channels.Message) error {
 		return err
 	}
 
-	content, err := emailMsg.GetContent()
+	content, err := message.GetContent()
 	if err != nil {
 		return err
 	}

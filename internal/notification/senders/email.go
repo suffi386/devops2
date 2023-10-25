@@ -2,6 +2,7 @@ package senders
 
 import (
 	"context"
+	"github.com/zitadel/zitadel/internal/notification/messages"
 
 	"github.com/zitadel/logging"
 	"github.com/zitadel/zitadel/internal/api/authz"
@@ -21,8 +22,8 @@ func EmailChannels(
 	getLogProvider func(ctx context.Context) (*log.Config, error),
 	successMetricName,
 	failureMetricName string,
-) (chain *Chain, err error) {
-	channels := make([]channels.NotificationChannel, 0, 3)
+) (chain *Chain[*messages.Email], err error) {
+	channels := make([]channels.NotificationChannel[*messages.Email], 0, 3)
 	p, err := smtp.InitChannel(emailConfig)
 	logging.WithFields(
 		"instance", authz.GetInstance(ctx).InstanceID(),
@@ -30,7 +31,7 @@ func EmailChannels(
 	if err == nil {
 		channels = append(
 			channels,
-			instrumenting.Wrap(
+			instrumenting.Wrap[*messages.Email](
 				ctx,
 				p,
 				smtpSpanName,
@@ -39,6 +40,6 @@ func EmailChannels(
 			),
 		)
 	}
-	channels = append(channels, debugChannels(ctx, getFileSystemProvider, getLogProvider)...)
+	channels = append(channels, debugChannels[*messages.Email](ctx, getFileSystemProvider, getLogProvider)...)
 	return ChainChannels(channels...), nil
 }
