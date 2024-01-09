@@ -37,7 +37,6 @@ func TestMain(m *testing.M) {
 	os.Exit(func() int {
 		ctx, errCtx, cancel := integration.Contexts(time.Hour)
 		defer cancel()
-
 		Tester = integration.NewTester(ctx)
 		defer Tester.Done()
 
@@ -1468,7 +1467,7 @@ func TestServer_AddIDPLink(t *testing.T) {
 			args: args{
 				CTX,
 				&user.AddIDPLinkRequest{
-					UserId: Tester.Users[integration.FirstInstanceUsersKey][integration.OrgOwner].ID,
+					UserId: Tester.GetUser(integration.FirstInstanceUsersKey, integration.OrgOwner).ID,
 					IdpLink: &user.IDPLink{
 						IdpId:    "idpID",
 						UserId:   "userID",
@@ -1484,7 +1483,7 @@ func TestServer_AddIDPLink(t *testing.T) {
 			args: args{
 				CTX,
 				&user.AddIDPLinkRequest{
-					UserId: Tester.Users[integration.FirstInstanceUsersKey][integration.OrgOwner].ID,
+					UserId: Tester.GetUser(integration.FirstInstanceUsersKey, integration.OrgOwner).ID,
 					IdpLink: &user.IDPLink{
 						IdpId:    idpID,
 						UserId:   "userID",
@@ -1570,7 +1569,7 @@ func TestServer_StartIdentityProviderIntent(t *testing.T) {
 				parametersEqual: map[string]string{
 					"client_id":     "clientID",
 					"prompt":        "select_account",
-					"redirect_uri":  "http://" + Tester.Config.ExternalDomain + ":8080/idps/callback",
+					"redirect_uri":  "http://" + Tester.FirstInstancePrimaryDomain + ":8080/idps/callback",
 					"response_type": "code",
 					"scope":         "openid profile email",
 				},
@@ -1597,7 +1596,7 @@ func TestServer_StartIdentityProviderIntent(t *testing.T) {
 					ChangeDate:    timestamppb.Now(),
 					ResourceOwner: Tester.Organisation.ID,
 				},
-				url:                "http://" + Tester.Config.ExternalDomain + ":8000/sso",
+				url:                "http://" + Tester.FirstInstancePrimaryDomain + ":8000/sso",
 				parametersExisting: []string{"RelayState", "SAMLRequest"},
 			},
 			wantErr: false,
@@ -1621,7 +1620,7 @@ func TestServer_StartIdentityProviderIntent(t *testing.T) {
 					ChangeDate:    timestamppb.Now(),
 					ResourceOwner: Tester.Organisation.ID,
 				},
-				url:                "http://" + Tester.Config.ExternalDomain + ":8000/sso",
+				url:                "http://" + Tester.FirstInstancePrimaryDomain + ":8000/sso",
 				parametersExisting: []string{"RelayState", "SAMLRequest"},
 			},
 			wantErr: false,

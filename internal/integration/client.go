@@ -62,7 +62,19 @@ func newClient(cc *grpc.ClientConn) Client {
 	}
 }
 
-func (t *Tester) UseIsolatedInstance(tt *testing.T, iamOwnerCtx, systemCtx context.Context) (primaryDomain, instanceId string, authenticatedIamOwnerCtx context.Context) {
+var _ require.TestingT = (*panicT)(nil)
+
+type panicT struct{}
+
+func (c panicT) FailNow() {
+	panic("failed")
+}
+
+func (c panicT) Errorf(format string, args ...interface{}) {
+	logging.Fatalf(format, args...)
+}
+
+func (t *Tester) UseIsolatedInstance(iamOwnerCtx, systemCtx context.Context) (primaryDomain, instanceId string, authenticatedIamOwnerCtx context.Context) {
 	primaryDomain = RandString(5) + ".integration.localhost"
 	instance, err := t.Client.System.CreateInstance(systemCtx, &system.CreateInstanceRequest{
 		InstanceName: "testinstance",
@@ -75,19 +87,17 @@ func (t *Tester) UseIsolatedInstance(tt *testing.T, iamOwnerCtx, systemCtx conte
 			},
 		},
 	})
-	if err != nil {
-		panic(err)
-	}
+	logging.OnError(err).Fatal("create instance")
 	t.createClientConn(iamOwnerCtx, fmt.Sprintf("%s:%d", primaryDomain, t.Config.Port))
 	instanceId = instance.GetInstanceId()
-	t.Users.Set(instanceId, IAMOwner, &User{
+	t.SetUser(instanceId, IAMOwner, &User{
 		Token: instance.GetPat(),
 	})
 	newCtx := t.WithInstanceAuthorization(iamOwnerCtx, IAMOwner, instanceId)
 	// the following serves two purposes:
 	// 1. it ensures that the instance is ready to be used
 	// 2. it enables a normal login with the default admin user credentials
-	require.EventuallyWithT(tt, func(collectT *assert.CollectT) {
+	require.EventuallyWithT(new(panicT), func(collectT *assert.CollectT) {
 		_, importErr := t.Client.Mgmt.ImportHumanUser(newCtx, &mgmt.ImportHumanUserRequest{
 			UserName: "zitadel-admin@zitadel.localhost",
 			Email: &mgmt.ImportHumanUserRequest_Email{
@@ -173,7 +183,7 @@ func (s *Tester) RegisterUserPasskey(ctx context.Context, userID string) {
 	pkr, err := s.Client.UserV2.RegisterPasskey(ctx, &user.RegisterPasskeyRequest{
 		UserId: userID,
 		Code:   reg.GetCode(),
-		Domain: s.Config.ExternalDomain,
+		Domain: s.FirstInstancePrimaryDomain,
 	})
 	logging.OnError(err).Fatal("create user passkey")
 	attestationResponse, err := s.WebAuthN.CreateAttestationResponse(pkr.GetPublicKeyCredentialCreationOptions())
@@ -191,7 +201,7 @@ func (s *Tester) RegisterUserPasskey(ctx context.Context, userID string) {
 func (s *Tester) RegisterUserU2F(ctx context.Context, userID string) {
 	pkr, err := s.Client.UserV2.RegisterU2F(ctx, &user.RegisterU2FRequest{
 		UserId: userID,
-		Domain: s.Config.ExternalDomain,
+		Domain: s.FirstInstancePrimaryDomain,
 	})
 	logging.OnError(err).Fatal("create user u2f")
 	attestationResponse, err := s.WebAuthN.CreateAttestationResponse(pkr.GetPublicKeyCredentialCreationOptions())
@@ -379,7 +389,7 @@ func (s *Tester) CreateVerifiedWebAuthNSessionWithLifetime(t *testing.T, ctx con
 		},
 		Challenges: &session.RequestChallenges{
 			WebAuthN: &session.RequestChallenges_WebAuthN{
-				Domain:                      s.Config.ExternalDomain,
+				Domain:                      s.FirstInstancePrimaryDomain,
 				UserVerificationRequirement: session.UserVerificationRequirement_USER_VERIFICATION_REQUIREMENT_REQUIRED,
 			},
 		},
