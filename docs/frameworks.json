@@ -111,5 +111,11 @@
     "imgSrcDark": "/docs/img/tech/rustlight.svg",
     "docsLink": "https://github.com/smartive/zitadel-rust",
     "external": true
+  },
+  {
+    "title": "PHP",
+    "imgSrcDark": "/docs/img/tech/php.svg",
+    "docsLink": "https://github.com/RedstonePfalz/zitadel-php-client",
+    "external": true
   }
 ]
