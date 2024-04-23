@@ -3,13 +3,21 @@ package admin
 import (
 	"context"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/zitadel/zitadel/internal/api/authz"
 	"github.com/zitadel/zitadel/internal/api/grpc/object"
 	org_grpc "github.com/zitadel/zitadel/internal/api/grpc/org"
 	"github.com/zitadel/zitadel/internal/command"
 	"github.com/zitadel/zitadel/internal/domain"
 	"github.com/zitadel/zitadel/internal/query"
+	// cmd_v2 "github.com/zitadel/zitadel/internal/v2/command"
+	"github.com/zitadel/zitadel/internal/v2/org"
+	"github.com/zitadel/zitadel/internal/v2/projection"
+	"github.com/zitadel/zitadel/internal/v2/readmodel"
 	admin_pb "github.com/zitadel/zitadel/pkg/grpc/admin"
+	object_pb "github.com/zitadel/zitadel/pkg/grpc/object"
+	org_pb "github.com/zitadel/zitadel/pkg/grpc/org"
 )
 
 func (s *Server) IsOrgUnique(ctx context.Context, req *admin_pb.IsOrgUniqueRequest) (*admin_pb.IsOrgUniqueResponse, error) {
@@ -35,6 +43,15 @@ func (s *Server) RemoveOrg(ctx context.Context, req *admin_pb.RemoveOrgRequest) 
 	return &admin_pb.RemoveOrgResponse{
 		Details: object.DomainToChangeDetailsPb(details),
 	}, nil
+
+	// intent, err := cmd_v2.NewRemoveOrg(req.GetOrgId()).ToPushIntent(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// if intent == nil {
+	// 	return new(admin_pb.RemoveOrgResponse), nil
+	// }
+	// return new(admin_pb.RemoveOrgResponse), s.es.Push(ctx, intent)
 }
 
 func (s *Server) GetDefaultOrg(ctx context.Context, _ *admin_pb.GetDefaultOrgRequest) (*admin_pb.GetDefaultOrgResponse, error) {
@@ -48,6 +65,46 @@ func (s *Server) GetOrgByID(ctx context.Context, req *admin_pb.GetOrgByIDRequest
 		return nil, err
 	}
 	return &admin_pb.GetOrgByIDResponse{Org: org_grpc.OrgViewToPb(org)}, nil
+}
+
+func orgToPb(org *readmodel.Org) *org_pb.Org {
+	res := &org_pb.Org{
+		Id:            org.ID,
+		State:         stateToPb(org.State),
+		Name:          org.Name,
+		PrimaryDomain: org.PrimaryDomain.Domain,
+		Details: &object_pb.ObjectDetails{
+			Sequence:      uint64(org.Sequence),
+			CreationDate:  timestamppb.New(org.CreationDate),
+			ChangeDate:    timestamppb.New(org.ChangeDate),
+			ResourceOwner: org.Owner,
+		},
+	}
+
+	if !org.CreationDate.IsZero() {
+		res.Details.CreationDate = timestamppb.New(org.CreationDate)
+	}
+
+	if !org.ChangeDate.IsZero() {
+		res.Details.ChangeDate = timestamppb.New(org.ChangeDate)
+	}
+
+	return res
+}
+
+func stateToPb(state *projection.OrgState) org_pb.OrgState {
+	switch state.State {
+	case org.ActiveState:
+		return org_pb.OrgState_ORG_STATE_ACTIVE
+	case org.InactiveState:
+		return org_pb.OrgState_ORG_STATE_INACTIVE
+	case org.RemovedState:
+		return org_pb.OrgState_ORG_STATE_REMOVED
+	case org.UndefinedState:
+		fallthrough
+	default:
+		return org_pb.OrgState_ORG_STATE_UNSPECIFIED
+	}
 }
 
 func (s *Server) ListOrgs(ctx context.Context, req *admin_pb.ListOrgsRequest) (*admin_pb.ListOrgsResponse, error) {
@@ -105,9 +162,6 @@ func (s *Server) getClaimedUserIDsOfOrgDomain(ctx context.Context, orgDomain str
 		return nil, err
 	}
 	users, err := s.query.SearchUsers(ctx, &query.UserSearchQueries{Queries: []query.SearchQuery{loginName}})
-	if err != nil {
-		return nil, err
-	}
 	if err != nil {
 		return nil, err
 	}

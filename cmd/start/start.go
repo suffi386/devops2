@@ -78,6 +78,8 @@ import (
 	"github.com/zitadel/zitadel/internal/notification"
 	"github.com/zitadel/zitadel/internal/query"
 	"github.com/zitadel/zitadel/internal/static"
+	es_v4 "github.com/zitadel/zitadel/internal/v2/eventstore"
+	"github.com/zitadel/zitadel/internal/v2/eventstore/postgres"
 	"github.com/zitadel/zitadel/internal/webauthn"
 	"github.com/zitadel/zitadel/openapi"
 )
@@ -156,9 +158,12 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 
 	sessionTokenVerifier := internal_authz.SessionTokenVerifier(keys.OIDC)
 
+	es := es_v4.NewEventstoreFromOne(postgres.New(esPusherDBClient))
+
 	queries, err := query.StartQueries(
 		ctx,
 		eventstoreClient,
+		es,
 		queryDBClient,
 		projectionDBClient,
 		config.Projections,
@@ -316,7 +321,7 @@ func startAPIs(
 	router *mux.Router,
 	commands *command.Commands,
 	queries *query.Queries,
-	eventstore *eventstore.Eventstore,
+	eventStore *eventstore.Eventstore,
 	dbClient *database.DB,
 	config *Config,
 	store static.Storage,
@@ -367,14 +372,14 @@ func startAPIs(
 	}
 
 	config.Auth.Spooler.Client = dbClient
-	config.Auth.Spooler.Eventstore = eventstore
-	authRepo, err := auth_es.Start(ctx, config.Auth, config.SystemDefaults, commands, queries, dbClient, eventstore, keys.OIDC, keys.User)
+	config.Auth.Spooler.Eventstore = eventStore
+	authRepo, err := auth_es.Start(ctx, config.Auth, config.SystemDefaults, commands, queries, dbClient, eventStore, keys.OIDC, keys.User)
 	if err != nil {
 		return nil, fmt.Errorf("error starting auth repo: %w", err)
 	}
 
 	config.Admin.Spooler.Client = dbClient
-	config.Admin.Spooler.Eventstore = eventstore
+	config.Admin.Spooler.Eventstore = eventStore
 	err = admin_es.Start(ctx, config.Admin, store, dbClient)
 	if err != nil {
 		return nil, fmt.Errorf("error starting admin repo: %w", err)
@@ -439,13 +444,13 @@ func startAPIs(
 	}
 	apis.RegisterHandlerOnPrefix(openapi.HandlerPrefix, openAPIHandler)
 
-	oidcServer, err := oidc.NewServer(ctx, config.OIDC, login.DefaultLoggedOutPath, config.ExternalSecure, commands, queries, authRepo, keys.OIDC, keys.OIDCKey, eventstore, dbClient, userAgentInterceptor, instanceInterceptor.Handler, limitingAccessInterceptor, config.Log.Slog(), config.SystemDefaults.SecretHasher)
+	oidcServer, err := oidc.NewServer(ctx, config.OIDC, login.DefaultLoggedOutPath, config.ExternalSecure, commands, queries, authRepo, keys.OIDC, keys.OIDCKey, eventStore, dbClient, userAgentInterceptor, instanceInterceptor.Handler, limitingAccessInterceptor, config.Log.Slog(), config.SystemDefaults.SecretHasher)
 	if err != nil {
 		return nil, fmt.Errorf("unable to start oidc provider: %w", err)
 	}
 	apis.RegisterHandlerPrefixes(oidcServer, oidcPrefixes...)
 
-	samlProvider, err := saml.NewProvider(config.SAML, config.ExternalSecure, commands, queries, authRepo, keys.OIDC, keys.SAML, eventstore, dbClient, instanceInterceptor.Handler, userAgentInterceptor, limitingAccessInterceptor)
+	samlProvider, err := saml.NewProvider(config.SAML, config.ExternalSecure, commands, queries, authRepo, keys.OIDC, keys.SAML, eventStore, dbClient, instanceInterceptor.Handler, userAgentInterceptor, limitingAccessInterceptor)
 	if err != nil {
 		return nil, fmt.Errorf("unable to start saml provider: %w", err)
 	}
