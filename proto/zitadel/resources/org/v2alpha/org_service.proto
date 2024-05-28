@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+package zitadel.resources.org.v2alpha;
+
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/struct.proto";
+import "protoc-gen-openapiv2/options/annotations.proto";
+import "validate/validate.proto";
+import "zitadel/protoc_gen_zitadel/v2/options.proto";
+
+import "zitadel/resources/object/v2alpha/object.proto";
+import "zitadel/resources/org/v2alpha/admin.proto";
+
+option go_package = "github.com/zitadel/zitadel/pkg/grpc/resources/org/v2alpha;org";
+
+option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_swagger) = {
+  info: {
+    title: "Organization Service";
+    version: "2.0-alpha";
+    description: "This API is intended to manage organizations in a ZITADEL instance. This project is in beta state. It can AND will continue breaking until the services provide the same functionality as the current login.";
+    contact:{
+      name: "ZITADEL"
+      url: "https://zitadel.com"
+      email: "hi@zitadel.com"
+    }
+    license: {
+      name: "Apache 2.0",
+      url: "https://github.com/zitadel/zitadel/blob/main/LICENSE";
+    };
+  };
+  schemes: HTTPS;
+  schemes: HTTP;
+
+  consumes: "application/json";
+  consumes: "application/grpc";
+
+  produces: "application/json";
+  produces: "application/grpc";
+
+  consumes: "application/grpc-web+proto";
+  produces: "application/grpc-web+proto";
+
+  host: "$ZITADEL_DOMAIN";
+  base_path: "/resources/v2alpha";
+
+  external_docs: {
+    description: "Detailed information about ZITADEL",
+    url: "https://zitadel.com/docs"
+  }
+  security_definitions: {
+    security: {
+      key: "OAuth2";
+      value: {
+        type: TYPE_OAUTH2;
+        flow: FLOW_ACCESS_CODE;
+        authorization_url: "$CUSTOM-DOMAIN/oauth/v2/authorize";
+        token_url: "$CUSTOM-DOMAIN/oauth/v2/token";
+        scopes: {
+          scope: {
+            key: "openid";
+            value: "openid";
+          }
+          scope: {
+            key: "urn:zitadel:iam:org:project:id:zitadel:aud";
+            value: "urn:zitadel:iam:org:project:id:zitadel:aud";
+          }
+        }
+      }
+    }
+  }
+  security: {
+    security_requirement: {
+      key: "OAuth2";
+      value: {
+        scope: "openid";
+        scope: "urn:zitadel:iam:org:project:id:zitadel:aud";
+      }
+    }
+  }
+  responses: {
+    key: "403";
+    value: {
+      description: "Returned when the user does not have permission to access the resource.";
+      schema: {
+        json_schema: {
+          ref: "#/definitions/rpcStatus";
+        }
+      }
+    }
+  }
+  responses: {
+    key: "404";
+    value: {
+      description: "Returned when the resource does not exist.";
+      schema: {
+        json_schema: {
+          ref: "#/definitions/rpcStatus";
+        }
+      }
+    }
+  }
+};
+
+service OrganizationService {
+
+  // Create a new organization and grant the user(s) permission to manage it
+  rpc CreateOrganization(CreateOrganizationRequest) returns (CreateOrganizationResponse) {
+    option (google.api.http) = {
+      post: "/orgs"
+      body: "*"
+    };
+
+    option (zitadel.protoc_gen_zitadel.v2.options) = {
+      auth_option: {
+        permission: "org.create"
+      }
+      http_response: {
+        success_code: 201
+      }
+    };
+
+    option (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_operation) = {
+      summary: "Create an Organization";
+      description: "Create a new organization with an administrative user. If no specific roles are sent for the users, they will be granted the role ORG_OWNER."
+      responses: {
+        key: "200"
+        value: {
+          description: "OK";
+        }
+      };
+    };
+  }
+}
+
+message CreateOrganizationRequest{
+  string name = 1 [
+    (validate.rules).string = {min_len: 1, max_len: 200},
+    (google.api.field_behavior) = REQUIRED,
+    (grpc.gateway.protoc_gen_openapiv2.options.openapiv2_field) = {
+      min_length: 1;
+      max_length: 200;
+      example: "\"ZITADEL\"";
+    }
+  ];
+  repeated AddAdmin admins = 2 [
+    (validate.rules).repeated = {
+      max_items: 5
+    }
+  ];
+}
+
+message CreateOrganizationResponse{
+  zitadel.resources.object.v2alpha.Details details = 1;
+  repeated AddedAdmin added_admins = 2;
+}
