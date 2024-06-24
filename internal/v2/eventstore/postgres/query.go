@@ -8,6 +8,7 @@ import (
 
 	"github.com/zitadel/logging"
 
+	"github.com/zitadel/zitadel/internal/api/transaction"
 	"github.com/zitadel/zitadel/internal/telemetry/tracing"
 	"github.com/zitadel/zitadel/internal/v2/database"
 	"github.com/zitadel/zitadel/internal/v2/eventstore"
@@ -23,8 +24,23 @@ func (s *Storage) Query(ctx context.Context, query *eventstore.Query) (eventCoun
 	if query.Tx() != nil {
 		return executeQuery(ctx, query.Tx(), &stmt, query)
 	}
+	if conn := transaction.FromContext(ctx); conn != nil {
+		return executeQuery(ctx, conn, &stmt, query)
+	}
 
-	return executeQuery(ctx, s.client.DB, &stmt, query)
+	ctx, connSpan := tracing.NewNamedSpan(ctx, "db.Conn")
+	conn, err := s.client.Conn(ctx)
+	connSpan.EndWithError(err)
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		_, closeSpan := tracing.NewNamedSpan(ctx, "db.Conn.Close")
+		closeErr := conn.Close()
+		closeSpan.EndWithError(closeErr)
+	}()
+
+	return executeQuery(ctx, conn, &stmt, query)
 }
 
 func executeQuery(ctx context.Context, tx database.Querier, stmt *database.Statement, reducer eventstore.Reducer) (eventCount int, err error) {
@@ -86,7 +102,7 @@ func writeQuery(stmt *database.Statement, query *eventstore.Query) {
 
 	stmt.WriteString(" FROM (")
 	writeFilters(stmt, query.Filters())
-	stmt.WriteRune(')')
+	stmt.WriteString(") sub")
 	writePagination(stmt, query.Pagination())
 }
 

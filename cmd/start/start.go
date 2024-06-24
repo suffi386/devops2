@@ -153,6 +153,7 @@ func startZitadel(ctx context.Context, config *Config, masterKey string, server 
 	}
 
 	config.Eventstore.Pusher = new_es.NewEventstore(esPusherDBClient)
+	config.Eventstore.Searcher = new_es.NewEventstore(queryDBClient)
 	config.Eventstore.Querier = old_es.NewCRDB(queryDBClient)
 	eventstoreClient := eventstore.NewEventstore(config.Eventstore)
 	eventstoreV4 := es_v4.NewEventstoreFromOne(es_v4_pg.New(queryDBClient, &es_v4_pg.Config{
@@ -367,7 +368,7 @@ func startAPIs(
 		http_util.WithMaxAge(int(math.Floor(config.Quotas.Access.ExhaustedCookieMaxAge.Seconds()))),
 	)
 	limitingAccessInterceptor := middleware.NewAccessInterceptor(accessSvc, exhaustedCookieHandler, &config.Quotas.Access.AccessConfig)
-	apis, err := api.New(ctx, config.Port, router, queries, verifier, config.InternalAuthZ, tlsConfig, config.HTTP2HostHeader, config.HTTP1HostHeader, config.ExternalDomain, limitingAccessInterceptor)
+	apis, err := api.New(ctx, config.Port, router, dbClient, queries, verifier, config.InternalAuthZ, tlsConfig, config.HTTP2HostHeader, config.HTTP1HostHeader, config.ExternalDomain, limitingAccessInterceptor)
 	if err != nil {
 		return nil, fmt.Errorf("error creating api %w", err)
 	}
