@@ -153,6 +153,7 @@ func Setup(ctx context.Context, config *Config, steps *Steps, masterKey string) 
 	steps.s25User11AddLowerFieldsToVerifiedEmail = &User11AddLowerFieldsToVerifiedEmail{dbClient: esPusherDBClient}
 	steps.s26AuthUsers3 = &AuthUsers3{dbClient: esPusherDBClient}
 	steps.s27IDPTemplate6SAMLNameIDFormat = &IDPTemplate6SAMLNameIDFormat{dbClient: esPusherDBClient}
+	steps.s28AddFieldsTable = &AddFieldsTable{dbClient: esPusherDBClient}
 
 	err = projection.Create(ctx, projectionDBClient, eventstoreClient, config.Projections, nil, nil, nil)
 	logging.OnError(err).Fatal("unable to start projections")
@@ -173,6 +174,7 @@ func Setup(ctx context.Context, config *Config, steps *Steps, masterKey string) 
 
 	for _, step := range []migration.Migration{
 		steps.s14NewEventsTable,
+		steps.s28AddFieldsTable,
 		steps.s1ProjectionTable,
 		steps.s2AssetsTable,
 		steps.FirstInstance,
