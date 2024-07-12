@@ -1065,7 +1065,9 @@ func (repo *AuthRequestRepo) nextSteps(ctx context.Context, request *domain.Auth
 		steps = append(steps, &domain.ChangePasswordStep{Expired: expired})
 	}
 	if !user.IsEmailVerified {
-		steps = append(steps, &domain.VerifyEMailStep{})
+		steps = append(steps, &domain.VerifyEMailStep{
+			InitPassword: !user.PasswordSet,
+		})
 	}
 	if user.UsernameChangeRequired {
 		steps = append(steps, &domain.ChangeUsernameStep{})
@@ -1226,6 +1228,9 @@ func (repo *AuthRequestRepo) firstFactorChecked(request *domain.AuthRequest, use
 	}
 
 	if user.PasswordInitRequired {
+		if !user.IsEmailVerified {
+			return &domain.VerifyEMailStep{InitPassword: true}
+		}
 		return &domain.InitPasswordStep{}
 	}
 
