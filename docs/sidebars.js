@@ -749,7 +749,7 @@ module.exports = {
           label: "Assets",
           collapsed: true,
           items: ["apis/assets/assets"],
-        },
+        }
       ],
     },
     {
@@ -815,6 +815,7 @@ module.exports = {
       label: "Rate Limits (Cloud)", // The link label
       href: "/legal/policies/rate-limit-policy", // The internal path
     },
+    "apis/known_docs_issues",
   ],
   selfHosting: [
     {
